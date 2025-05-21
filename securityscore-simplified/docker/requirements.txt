@@ -1,0 +1,6 @@
+flask
+nuclei==2.9.7
+trufflehog
+amass
+requests
+python-dotenv

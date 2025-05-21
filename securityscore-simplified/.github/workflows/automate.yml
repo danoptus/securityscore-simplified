@@ -1,0 +1,54 @@
+name: SecurityScore Weekly Check
+
+on:
+  schedule:
+    - cron: '0 8 * * 1' # Toda segunda-feira às 8h UTC
+  workflow_dispatch: # Rode manualmente também
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.10-slim
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup dependencies
+        run: |
+          apt update && apt install -y git nmap curl jq
+          pip install nuclei trufflehog amass flask requests
+
+      - name: Run collection
+        run: |
+          chmod +x src/collect.sh
+          ./src/collect.sh
+
+      - name: Calculate score
+        run: python src/score.py
+
+      - name: Send notifications
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          GOOGLE_CHAT_WEBHOOK: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
+        run: python src/notify.py
+
+      - name: Generate static dashboard
+        run: |
+          cat <<EOF > index.html
+          <html><body>
+          <h1>📊 SecurityScore</h1>
+          <p><strong>Último score:</strong> $(jq '.score' reports/latest.json)</p>
+          <pre>$(cat reports/latest.json)</pre>
+          </body></html>
+          EOF
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./
